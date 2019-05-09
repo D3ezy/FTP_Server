@@ -31,10 +31,9 @@ public class Server implements Runnable {
             LOGGER.log(e.toString());
         }        
     }
+    
+    @Override
     public void run() {
-        synchronized(this) {
-            this.myThread = Thread.currentThread();
-        }
         try {
             this.connectionSocket = new ServerSocket(connectionPort);
             this.isRunning = true;
@@ -42,7 +41,6 @@ public class Server implements Runnable {
                 Socket newConn = null;
                 newConn = this.connectionSocket.accept();
                 LOGGER.log("A new client has connected: " + newConn);
-                new Thread(new ServerRunnable(newConn, LOGGER)).start();
             }
         } catch (IOException e) {
             LOGGER.log("Failed to create new instance or accept connection: " + e.toString());

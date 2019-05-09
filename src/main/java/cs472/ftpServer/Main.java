@@ -21,9 +21,7 @@ public class Main {
 			System.exit(1);
 		} 
 
-		// Initialize a new client and show the menu
         Server s = new Server(args[0], args[1]);
-        new Thread(s).start();
         s.run();
     }
 }
