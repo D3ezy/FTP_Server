@@ -17,7 +17,7 @@ public class Main {
     public static void main(String[] args) {
         // arg check
 		if (args.length != 2) {
-			LOGGER.log("Usage: java -jar .\\build\\libs\\CS472-ftpServer-all-x.x.jar <listening port> <log file>");
+			LOGGER.log("Usage: java -jar .\\build\\libs\\CS472-ftpServer-all-x.x.jar <log file> <listening port>");
 			System.exit(1);
 		} 
 
