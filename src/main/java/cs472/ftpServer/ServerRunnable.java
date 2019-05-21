@@ -1,11 +1,17 @@
 /*
- * Server.java
+ * ServerRunnable.java
  * 
  * Author: Matthew Dey
  * Date Created: May 3nd, 2019
  * Drexel University
  * CS 472 - HW3 - Computer Networks
  * 
+ */
+
+ /*
+    Testing info:
+    Host: localhost
+    Port: 21 (for HW2 Client)
  */
 
 package cs472.ftpServer;
@@ -21,6 +27,10 @@ import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Random;
+import java.util.Arrays;
 import java.io.File;
 
 public class ServerRunnable extends Thread {
@@ -30,13 +40,16 @@ public class ServerRunnable extends Thread {
     private boolean userLoggedIn;
     private BufferedReader reader;
     private BufferedWriter writer;
-    private ServerSocket dataSocket;
+    private ServerSocket passiveSocket;
     private Socket portSocket;
     private String portHost;
     private int dataPort;
     private int portDataPort;
     protected Socket clientSocket;
     private String username;
+    private String thread_id;
+    private boolean inPassive;
+    private boolean inPort;
 
     ServerRunnable(Socket clientSocket, DataInputStream is, DataOutputStream os, Logger serverLog) {
         this.LOGGER = serverLog;
@@ -45,12 +58,15 @@ public class ServerRunnable extends Thread {
         this.writer = new BufferedWriter(new OutputStreamWriter(os));
         this.userLoggedIn = false;
         this.currDir = System.getProperty("user.dir");
+        this.inPassive = false;
+        this.inPort = false;
     }
 
     @Override
     public void run() {
         // print message
         this.sendResponse("220 Connected. DeezyFTP - Welcome!");
+        this.thread_id = Thread.currentThread().getName();
         while(true) {
             String client_response = this.readInput();
             // wait for response
@@ -65,7 +81,7 @@ public class ServerRunnable extends Thread {
             read = reader.readLine();
             return read;
         } catch(IOException e) {
-            LOGGER.log("Unable to read input from Client: " + e.toString());
+            LOGGER.log("[ON: " + this.thread_id + "] " + "Unable to read input from Client: " + e.toString());
         }
         return null;
     }
@@ -75,26 +91,26 @@ public class ServerRunnable extends Thread {
             writer.write(comm + "\r\n");
             writer.flush();
         } catch (IOException e) {
-            LOGGER.log("Unable to write response to client " + this.clientSocket + ". Closing socket.");
+            LOGGER.log("[ON: " + this.thread_id + "] " + "Unable to write response to client " + this.clientSocket + ". Closing socket.");
         }
         return;
     }
 
     private void user(String username) {
         this.username = username;
-        LOGGER.log("331 Password required for " + username);
+        LOGGER.log("[ON: " + this.thread_id + "] " + "331 Password required for " + username);
         this.sendResponse("331 Please specify the password.");
         return;
     }
 
     private void pass(String password) {
         if (this.username == null) {
-            LOGGER.log("No username provided.");
+            LOGGER.log("[ON: " + this.thread_id + "] " + "No username provided.");
             LOGGER.log("");
             this.sendResponse("");
             return;
         }
-        LOGGER.log("Received username and password. Authenticating.");
+        LOGGER.log("[ON: " + this.thread_id + "] " + "Received username and password. Authenticating.");
         this.authenticate(this.username, password);
         return;
     }
@@ -113,11 +129,11 @@ public class ServerRunnable extends Thread {
                     return;
                 }
             }
-            LOGGER.log("530 Login incorrect.");
+            LOGGER.log("[ON: " + this.thread_id + "] " + "530 Login incorrect.");
             this.sendResponse("530 Login incorrect.");
             br.close();
         } catch (FileNotFoundException e) {
-            LOGGER.log("Unable to find authenticated users file.");
+            LOGGER.log("[ON: " + this.thread_id + "] " + "Unable to find authenticated users file.");
         } catch (IOException x) {
         }
         return;
@@ -125,8 +141,8 @@ public class ServerRunnable extends Thread {
 
     public void cwd(String directory) {
         if(!this.userLoggedIn) {
-            LOGGER.log("Unable to change working directory. User not logged in.");
-            LOGGER.log("Sent: 530 Not logged in.");
+            LOGGER.log("[ON: " + this.thread_id + "] " + "Unable to change working directory. User not logged in.");
+            LOGGER.log("[ON: " + this.thread_id + "] " + "Sent: 530 Not logged in.");
             this.sendResponse("530 Not logged in.");
             return;
         }
@@ -135,8 +151,8 @@ public class ServerRunnable extends Thread {
 
     public void cdup() {
         if(!this.userLoggedIn) {
-            LOGGER.log("Unable to cdup. User not logged in.");
-            LOGGER.log("Sent: 530 Not logged in.");
+            LOGGER.log("[ON: " + this.thread_id + "] " + "Unable to cdup. User not logged in.");
+            LOGGER.log("[ON: " + this.thread_id + "] " + "Sent: 530 Not logged in.");
             this.sendResponse("530 Not logged in.");
             return;
         }
@@ -147,20 +163,42 @@ public class ServerRunnable extends Thread {
         return;
     }
 
+    // grab an available port, open data socket on that port, accept connection
+    // ez gg
     public void pasv() {
         if(!this.userLoggedIn) {
-            LOGGER.log("cmd pasv: Unable to enter passive mode. User not logged in.");
-            LOGGER.log("Sent: 530 Not logged in.");
+            LOGGER.log("[ON: " + this.thread_id + "] " + "cmd pasv: Unable to enter passive mode. User not logged in.");
+            LOGGER.log("[ON: " + this.thread_id + "] " + "Sent: 530 Not logged in.");
             this.sendResponse("530 Not logged in.");
             return;
         }
+
+        if(this.inPort) {
+            LOGGER.log("[ON: " + this.thread_id + "] " + "PASV cmd: Client currently connected for PORT data transfers. Turning off PORT mode.");
+            this.inPort = false;
+            LOGGER.log("[ON: " + this.thread_id + "] " + "PASV cmd: PORT mode turned off. Ready to enter Passive mode.");
+        }
+        // test, but get local IP here and store in pasv_cmd
+        String pasv_cmd = "127,0,0,1";
+        LOGGER.log("[ON: " + this.thread_id + "] " + "PASV cmd: Got IP Address. Added to string.");
+        LOGGER.log("[ON: " + this.thread_id + "] " + "PASV cmd: Parsing random selected port. Adding to string.");
+        // String pasv_cmd;
+        // parse port and sent host/port to client
+        int port = this.getPasvPort();
+        int port_1, port_2;
+        LOGGER.log("[ON: " + this.thread_id + "] " + "Sent: 227 Entering Passive Mode (" + pasv_cmd + ").");
+        this.sendResponse("227 Entering Passive Mode (" + pasv_cmd + ").");
+
+        // set the data connections to prepare for passive transfers
+        this.dataPort = 1;
+        this.inPassive = true;
         return;
     }
 
     public void epsv() {
         if(!this.userLoggedIn) {
-            LOGGER.log("cmd epsv: Unable to enter extended passive mode. User not logged in.");
-            LOGGER.log("Sent: 530 Not logged in.");
+            LOGGER.log("[ON: " + this.thread_id + "] " + "cmd epsv: Unable to enter extended passive mode. User not logged in.");
+            LOGGER.log("[ON: " + this.thread_id + "] " + "Sent: 530 Not logged in.");
             this.sendResponse("530 Not logged in.");
             return;
         }
@@ -169,23 +207,34 @@ public class ServerRunnable extends Thread {
 
     public void port(String address) {
         if(!this.userLoggedIn) {
-            LOGGER.log("cmd port: Unable to enable port mode. User not logged in.");
-            LOGGER.log("Sent: 530 Not logged in.");
+            LOGGER.log("[ON: " + this.thread_id + "] " + "PORT cmd: Unable to enable port mode. User not logged in.");
+            LOGGER.log("[ON: " + this.thread_id + "] " + "Sent: 530 Not logged in.");
             this.sendResponse("530 Not logged in.");
             return;
         }
+
+        // if its already in passive mode, turn off
+        if(this.inPassive) {
+            LOGGER.log("[ON: " + this.thread_id + "] " + "PORT cmd: Client currently connected for Passive data transfers. Turning off Passive mode.");
+            this.inPassive = false;
+            LOGGER.log("[ON: " + this.thread_id + "] " + "PORT cmd: Passive mode turned off. Ready to enter Passive mode.");
+        }
+
         // parse command to get host and port number
         this.parseClientPort(address);
 
-        // establish connection with new socket to the client
         // return and wait to see what happens next lul
+        // set the data port to the correct port
+        // set the inPort boolean to true
+        this.portDataPort = 1; // placeholder
+        this.inPort = true;
         return;
     }
 
     public void eprt(String address) {
         if(!this.userLoggedIn) {
-            LOGGER.log("cmd eprt: Unable to enter extended port mode. User not logged in.");
-            LOGGER.log("Sent: 530 Not logged in.");
+            LOGGER.log("[ON: " + this.thread_id + "] " + "cmd eprt: Unable to enter extended port mode. User not logged in.");
+            LOGGER.log("[ON: " + this.thread_id + "] " + "Sent: 530 Not logged in.");
             this.sendResponse("530 Not logged in.");
             return;
         }
@@ -194,8 +243,8 @@ public class ServerRunnable extends Thread {
 
     public void retr(String file) {
         if(!this.userLoggedIn) {
-            LOGGER.log("Unable to retrieve files. User not logged in.");
-            LOGGER.log("Sent: 530 Not logged in.");
+            LOGGER.log("[ON: " + this.thread_id + "] " + "Unable to retrieve files. User not logged in.");
+            LOGGER.log("[ON: " + this.thread_id + "] " + "Sent: 530 Not logged in.");
             this.sendResponse("530 Not logged in.");
             return;
         }
@@ -204,8 +253,8 @@ public class ServerRunnable extends Thread {
 
     public void stor(String filename) {
         if(!this.userLoggedIn) {
-            LOGGER.log("Unable to store files. User not logged in.");
-            LOGGER.log("Sent: 532 Need account for storing files.");
+            LOGGER.log("[ON: " + this.thread_id + "] " + "Unable to store files. User not logged in.");
+            LOGGER.log("[ON: " + this.thread_id + "] " + "Sent: 532 Need account for storing files.");
             this.sendResponse("532 Need account for storing files.");
             return;
         }
@@ -214,14 +263,14 @@ public class ServerRunnable extends Thread {
 
     // Prints the current directory
     public void pwd() {
-        LOGGER.log("Getting current system directory.");
-        LOGGER.log("Sent: 257 \"" + this.currDir + "\" is the current working directory");
+        LOGGER.log("[ON: " + this.thread_id + "] " + "Getting current system directory.");
+        LOGGER.log("[ON: " + this.thread_id + "] " + "Sent: 257 \"" + this.currDir + "\" is the current working directory");
         this.sendResponse("257 \"" + this.currDir + "\" is the current working directory");
         return;
     }
 
     public void syst() {
-        LOGGER.log("SYST cmd: Printing system information.");
+        LOGGER.log("[ON: " + this.thread_id + "] " + "SYST cmd: Printing system information.");
         String info = System.getProperty("os.name");
         this.sendResponse("215 " + info);
         return;
@@ -229,8 +278,8 @@ public class ServerRunnable extends Thread {
 
     public void list(String d) {
         if(!this.userLoggedIn) {
-            LOGGER.log("Unable to send directory listing. User not logged in.");
-            LOGGER.log("Sent: 530 Not logged in.");
+            LOGGER.log("[ON: " + this.thread_id + "] " + "Unable to send directory listing. User not logged in.");
+            LOGGER.log("[ON: " + this.thread_id + "] " + "Sent: 530 Not logged in.");
             this.sendResponse("530 Not logged in.");
             return;
         }
@@ -258,7 +307,7 @@ public class ServerRunnable extends Thread {
 
     public void parseCmds(String cmd) {
         String[] args = cmd.split(" ");
-        LOGGER.log("cmd Received from Client: "+ args[0]);
+        LOGGER.log("[ON: " + this.thread_id + "] " + "cmd Received from Client: "+ args[0]);
         switch(args[0].toUpperCase()) {
             case "USER":
                 this.user(args[1]);
@@ -285,8 +334,8 @@ public class ServerRunnable extends Thread {
                 try {
                     this.port(args[1]);
                 } catch (IllegalArgumentException e) {
-                    LOGGER.log("PORT cmd: Not a valid argument.");
-                    LOGGER.log("Sent: 500 Not a valid argument for PORT command.");
+                    LOGGER.log("[ON: " + this.thread_id + "] " + "PORT cmd: Not a valid argument.");
+                    LOGGER.log("[ON: " + this.thread_id + "] " + "Sent: 500 Not a valid argument for PORT command.");
                     this.sendResponse("500 Not a valid argument for PORT command.");
                 }
                 break;
@@ -311,8 +360,8 @@ public class ServerRunnable extends Thread {
                 } else if (args.length == 2) {
                     this.list(args[1]);
                 } else {
-                    LOGGER.log("LIST cmd: Not a valid argument.");
-                    LOGGER.log("Sent: ");
+                    LOGGER.log("[ON: " + this.thread_id + "] " + "LIST cmd: Not a valid argument.");
+                    LOGGER.log("[ON: " + this.thread_id + "] " + "Sent: ");
                     this.sendResponse("500 ");
                 }
                 break;
@@ -320,11 +369,38 @@ public class ServerRunnable extends Thread {
                 this.help();
                 break;
             default:
-                LOGGER.log("cmd: " + args[0] + " not recognized. Please try again.");
-                LOGGER.log("Sent: 502 Command not implemented");
+                LOGGER.log("[ON: " + this.thread_id + "] " + "cmd: " + args[0] + " not recognized. Please try again.");
+                LOGGER.log("[ON: " + this.thread_id + "] " + "Sent: 502 Command not implemented");
                 this.sendResponse("502 Command not implemented.");
                 break;
         }
+    }
+
+    // initiate data connection
+    private void createConnection() {
+        if (this.inPassive) {
+            try {
+                LOGGER.log("[ON: " + this.thread_id + "] " + "createConnection (PASV): opening data port socket.");
+                LOGGER.log("[ON: " + this.thread_id + "] " + "Sent: 150 Opening ASCII mode data connection");
+                this.sendResponse("150 Opening ASCII mode data connection");
+                this.passiveSocket = new ServerSocket(this.dataPort);
+            } catch (IOException e) {
+
+            }
+            return;
+        } else if (this.inPort) {
+            try {
+                LOGGER.log("[ON: " + this.thread_id + "] " + "createConnection (PORT): opening data port socket.");
+                LOGGER.log("[ON: " + this.thread_id + "] " + "Sent: 150 Opening ASCII mode data connection");
+                this.sendResponse("150 Opening ASCII mode data connection");
+                this.portSocket = new Socket(this.portHost, this.portDataPort);
+            } catch (IOException e) {
+
+            }
+            return;
+        } else {    
+        }
+        return;
     }
 
     // parse port commands from client
@@ -333,6 +409,16 @@ public class ServerRunnable extends Thread {
 	    this.portHost = numbers[0] + "." + numbers [1] +"." + numbers[2] + "." + numbers [3];
 		this.portDataPort = getPort(numbers[4], numbers[5]);
 		return;
+    }
+
+    private int getPasvPort() {
+        List<Integer> ports = Arrays.asList(39392, 39451, 39567, 21143);
+        ArrayList<Integer> avail_ports = new ArrayList<>();
+        avail_ports.addAll(ports);
+
+        Random num = new Random();
+        return avail_ports.get(num.nextInt(avail_ports.size()));
+        
     }
 
     // returns client socket port number

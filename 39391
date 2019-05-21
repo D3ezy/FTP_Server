@@ -1,9 +1,0 @@
-[2019/05/20 13:25:14]: Server initialization: Invalid port, cannot convert String to int.
-[2019/05/20 13:25:14]: java.lang.NumberFormatException: For input string: "C:\Users\matth\Desktop\Server.log"
-[2019/05/20 13:25:14]: Accepting new connections...
-[2019/05/20 13:51:53]: Server initialization: Invalid port, cannot convert String to int.
-[2019/05/20 13:51:53]: java.lang.NumberFormatException: For input string: "C:\Users\matth\Desktop\Server.log"
-[2019/05/20 13:51:53]: Accepting new connections...
-[2019/05/20 13:56:07]: Server initialization: Invalid port, cannot convert String to int.
-[2019/05/20 13:56:07]: java.lang.NumberFormatException: For input string: "C:\Users\matth\Desktop\Server.log"
-[2019/05/20 13:56:08]: Accepting new connections...
