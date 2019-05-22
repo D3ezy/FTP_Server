@@ -40,8 +40,11 @@ public class ServerRunnable extends Thread {
     private boolean userLoggedIn;
     private BufferedReader reader;
     private BufferedWriter writer;
+    private BufferedReader dataReader;
+    private BufferedWriter dataWriter;
     private ServerSocket passiveSocket;
     private Socket portSocket;
+    private Socket clientDataSocket;
     private String portHost;
     private int dataPort;
     private int portDataPort;
@@ -50,6 +53,7 @@ public class ServerRunnable extends Thread {
     private String thread_id;
     private boolean inPassive;
     private boolean inPort;
+    private boolean isRunning;
 
     ServerRunnable(Socket clientSocket, DataInputStream is, DataOutputStream os, Logger serverLog) {
         this.LOGGER = serverLog;
@@ -60,6 +64,7 @@ public class ServerRunnable extends Thread {
         this.currDir = System.getProperty("user.dir");
         this.inPassive = false;
         this.inPort = false;
+        this.isRunning = true;
     }
 
     @Override
@@ -67,18 +72,30 @@ public class ServerRunnable extends Thread {
         // print message
         this.sendResponse("220 Connected. DeezyFTP - Welcome!");
         this.thread_id = Thread.currentThread().getName();
-        while(true) {
+        while(this.isRunning) {
             String client_response = this.readInput();
             // wait for response
             // response goes into "parseCmds()"
             this.parseCmds(client_response);
         }
+        return;
     }
 
     public String readInput() {
         String read;
         try {
             read = reader.readLine();
+            return read;
+        } catch(IOException e) {
+            LOGGER.log("[ON: " + this.thread_id + "] " + "Unable to read input from Client: " + e.toString());
+        }
+        return null;
+    }
+
+    private String readData() {
+        String read;
+        try {
+            read = dataReader.readLine();
             return read;
         } catch(IOException e) {
             LOGGER.log("[ON: " + this.thread_id + "] " + "Unable to read input from Client: " + e.toString());
@@ -95,6 +112,17 @@ public class ServerRunnable extends Thread {
         }
         return;
     }
+
+    private void sendData(String comm) {
+        try {
+            dataWriter.write(comm + "\r\n");
+            dataWriter.flush();
+        } catch (IOException e) {
+            LOGGER.log("[ON: " + this.thread_id + "] " + "Unable to write response to client " + this.clientSocket + ". Closing socket.");
+        }
+        return;
+    }
+    
 
     private void user(String username) {
         this.username = username;
@@ -160,6 +188,13 @@ public class ServerRunnable extends Thread {
     }
 
     public void quit() {
+        LOGGER.log("Attempting to kill thread, closing all available connections.");
+        try {
+            this.clientSocket.close();
+        } catch (IOException e) {
+            LOGGER.log("One or more connections already closed. Exiting.");
+        }
+        this.isRunning = false;
         return;
     }
 
@@ -184,13 +219,18 @@ public class ServerRunnable extends Thread {
         LOGGER.log("[ON: " + this.thread_id + "] " + "PASV cmd: Parsing random selected port. Adding to string.");
         // String pasv_cmd;
         // parse port and sent host/port to client
-        int port = this.getPasvPort();
-        int port_1, port_2;
+        // int port = this.getPasvPort();
+        // int port_1, port_2;
+        int port = 44936;
+        int port_1 = 175;
+        int port_2 = 136;
+        pasv_cmd += ","+ port_1 + "," + port_2;
+        LOGGER.log("[ON: " + this.thread_id + "] " + "PASV cmd:  Command created. Sending: " + pasv_cmd);
         LOGGER.log("[ON: " + this.thread_id + "] " + "Sent: 227 Entering Passive Mode (" + pasv_cmd + ").");
         this.sendResponse("227 Entering Passive Mode (" + pasv_cmd + ").");
 
         // set the data connections to prepare for passive transfers
-        this.dataPort = 1;
+        this.dataPort = port;
         this.inPassive = true;
         return;
     }
@@ -283,20 +323,65 @@ public class ServerRunnable extends Thread {
             this.sendResponse("530 Not logged in.");
             return;
         }
+
         File directory;
         if (d.equals("")) {
             directory = new File(this.currDir);
         } else {
             directory = new File(this.currDir + d);
         }
+
+        if(inPassive) {
+            try {
+                this.createConnection();
+                this.clientDataSocket = this.passiveSocket.accept();
+                this.dataWriter = new BufferedWriter(new OutputStreamWriter(this.clientDataSocket.getOutputStream()));
+            } catch (IOException e) {
+                LOGGER.log("LIST cmd: No acceptable connection from client to connect to.");
+                return;
+            }
+        } else if (this.inPort) {
+            try {
+                // in port mode
+                this.createConnection();
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        } else {
+            // neither in port or passive mode
+            LOGGER.log("[ON: " + this.thread_id + "] " + "Neither port or passive modes are enabled.");
+            return;
+        }
+        LOGGER.log("[ON: " + this.thread_id + "] " + "LIST cmd: Attempting to write data");
+        LOGGER.log("[ON: " + this.thread_id + "] " + "Sent: 150 Here comes the directory listing.");
+        this.sendResponse("150 Here comes the directory listing.");
         File[] filesList = directory.listFiles();
+        ArrayList<String> files = new ArrayList<>();
+        ArrayList<String> directories = new ArrayList<>();
         for(File f : filesList){
             if(f.isDirectory())
-                System.out.println(f.getName());
-            if(f.isFile()){
-                System.out.println(f.getName());
+                directories.add("-------Directory------ " + f.getName());
+            else if(f.isFile()){
+                files.add("---------File-------- " + f.getName());
             }
         }
+        ArrayList<String> listings = new ArrayList<>(directories);
+        listings.addAll(files);
+        for (int i = 0; i < listings.size(); i++) {
+            this.sendData(listings.get(i));
+        }
+        try {
+            if (this.inPassive) {
+                this.clientDataSocket.close();
+            } else {
+                this.portSocket.close();
+            }
+        } catch (IOException e) {
+            LOGGER.log("[ON: " + this.thread_id + "] " + "LIST cmd: Unable to close the data connection socket.");
+        }
+        LOGGER.log("[ON: " + this.thread_id + "] " + "Data writing completed.");
+        LOGGER.log("[ON: " + this.thread_id + "] " +"Sent: 226 Directory send OK.");
+        this.sendResponse("226 Directory send OK.");
         return;
     }
 
@@ -306,7 +391,14 @@ public class ServerRunnable extends Thread {
     }
 
     public void parseCmds(String cmd) {
-        String[] args = cmd.split(" ");
+        String[] args;
+        try {
+            args = cmd.split(" ");
+        } catch (NullPointerException e) {
+            LOGGER.log("Client closed the connection.");
+            this.quit();
+            return;
+        }
         LOGGER.log("[ON: " + this.thread_id + "] " + "cmd Received from Client: "+ args[0]);
         switch(args[0].toUpperCase()) {
             case "USER":
@@ -343,7 +435,14 @@ public class ServerRunnable extends Thread {
                 this.eprt(cmd);
                 break;
             case "RETR":
-                this.retr(cmd);
+                try {
+                    this.retr(cmd);
+                } catch (ArrayIndexOutOfBoundsException e) {
+                    LOGGER.log("[ON: " + this.thread_id + "] " + "No file provided for RETR cmd.");
+                    LOGGER.log("Sent: ");
+                    this.sendResponse("");
+                    break;
+                }
                 break;
             case "STOR":
                 this.stor(cmd);
@@ -381,8 +480,6 @@ public class ServerRunnable extends Thread {
         if (this.inPassive) {
             try {
                 LOGGER.log("[ON: " + this.thread_id + "] " + "createConnection (PASV): opening data port socket.");
-                LOGGER.log("[ON: " + this.thread_id + "] " + "Sent: 150 Opening ASCII mode data connection");
-                this.sendResponse("150 Opening ASCII mode data connection");
                 this.passiveSocket = new ServerSocket(this.dataPort);
             } catch (IOException e) {
 
@@ -391,8 +488,6 @@ public class ServerRunnable extends Thread {
         } else if (this.inPort) {
             try {
                 LOGGER.log("[ON: " + this.thread_id + "] " + "createConnection (PORT): opening data port socket.");
-                LOGGER.log("[ON: " + this.thread_id + "] " + "Sent: 150 Opening ASCII mode data connection");
-                this.sendResponse("150 Opening ASCII mode data connection");
                 this.portSocket = new Socket(this.portHost, this.portDataPort);
             } catch (IOException e) {
 
@@ -412,7 +507,7 @@ public class ServerRunnable extends Thread {
     }
 
     private int getPasvPort() {
-        List<Integer> ports = Arrays.asList(39392, 39451, 39567, 21143);
+        List<Integer> ports = Arrays.asList(39392, 39451, 39567, 45809);
         ArrayList<Integer> avail_ports = new ArrayList<>();
         avail_ports.addAll(ports);
 
