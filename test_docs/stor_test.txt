@@ -1,0 +1,3 @@
+testing stor on implemented server
+if this works, both of the files tested should end up full
+and in both directories, the client and the server
