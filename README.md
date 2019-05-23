@@ -30,7 +30,7 @@ The way FTP solves file transfer, for the time that the protocol was created, wa
 
 4. EXTRA CREDIT: How hard would it be to make FTP use one channel instead of two?
 
-It would be pretty hard to make FTP use one channel instead of two because of the way Socket blocking works. Additionally, it would be difficult because it wouldn't be FTP anymore. The protocol is specifically designed with the mindset that data would be transferred using a second connection. New ACKs and NACKs would have to be introduced in order to keep client/server communication. 
+It would be pretty hard to make FTP use one channel instead of two because of the way Socket blocking works. Additionally, it would be difficult because it wouldn't be FTP anymore. The protocol is specifically designed with the mindset that data would be transferred using a second connection. New ACKs and NACKs would have to be introduced in order to keep client/server communication. This could be done by reimplementing a new version of the FTP protocol, with new ACKs and a sliding window setup. This would also not allow the PORT/PASV command to be used, because the client would not be allowed to act as a server nor would the server be able to send a new port to connect to. I think that this could be done, but at a cost and it would not be worth it.
 
 Files:
 

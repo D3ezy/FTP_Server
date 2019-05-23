@@ -53,6 +53,8 @@ public class ServerRunnable extends Thread {
     private boolean inPassive;
     private boolean inPort;
     private boolean isRunning;
+    private boolean inExtendedPort;
+    private boolean inExtendedPassive;
 
     ServerRunnable(Socket clientSocket, DataInputStream is, DataOutputStream os, Logger serverLog) {
         this.LOGGER = serverLog;
@@ -63,6 +65,8 @@ public class ServerRunnable extends Thread {
         this.currDir = System.getProperty("user.dir");
         this.inPassive = false;
         this.inPort = false;
+        this.inExtendedPort = false;
+        this.inExtendedPassive = false;
         this.isRunning = true;
     }
 
@@ -212,10 +216,12 @@ public class ServerRunnable extends Thread {
             return;
         }
 
-        if(this.inPort) {
-            LOGGER.log("[ON: " + this.thread_id + "] " + "PASV cmd: Client currently connected for PORT data transfers. Turning off PORT mode.");
+        if(this.inPort || this.inExtendedPassive || this.inExtendedPort) {
+            LOGGER.log("[ON: " + this.thread_id + "] " + "PASV cmd: Client currently connected for PORT/EPRT/EPSV data transfers. Turning off PORT mode.");
             this.inPort = false;
-            LOGGER.log("[ON: " + this.thread_id + "] " + "PASV cmd: PORT mode turned off. Ready to enter Passive mode.");
+            this.inExtendedPassive = false;
+            this.inExtendedPort = false;
+            LOGGER.log("[ON: " + this.thread_id + "] " + "PASV cmd: PORT/EPRT/EPSV mode turned off. Ready to enter Passive mode.");
         }
         // test, but get local IP here and store in pasv_cmd
         String pasv_cmd = "127,0,0,1";
@@ -245,8 +251,28 @@ public class ServerRunnable extends Thread {
             return;
         }
 
+        if(this.inPort || this.inPassive || this.inExtendedPort) {
+            LOGGER.log("[ON: " + this.thread_id + "] " + "PASV cmd: Client currently connected for PORT/PASV/EPRT data transfers. Turning off PORT mode.");
+            this.inPort = false;
+            this.inPassive = false;
+            this.inExtendedPort = false;
+            LOGGER.log("[ON: " + this.thread_id + "] " + "PASV cmd: PORT/PASV/EPRT mode turned off. Ready to enter Passive mode.");
+        }
+
+        LOGGER.log("[ON: " + this.thread_id + "] " + "EPSV cmd: Getting Passive Port.");
+        int port = this.getEpsvPort();
         // parse epsv and send command
         // add epsv as an option to list, stor, retr
+        // set the data connections to prepare for passive transfers
+        LOGGER.log("[ON: " + this.thread_id + "] " + "EPSV cmd: Got port. Setting variables and preparing to send to client.");
+        String cmd = "(|||" + port + "|)";
+        if (!this.inExtendedPassive) {
+            this.inExtendedPassive = true;
+        }
+        LOGGER.log("[ON: " + this.thread_id + "] " + "Sent: 200 Entering Extended Passive Mode " + cmd);
+        this.sendResponse("200 Entering Extended Passive Mode " + cmd);
+        this.dataPort = port;
+        LOGGER.log("[ON: " + this.thread_id + "] " + "EPSV cmd: In Extended PASSIVE mode.");
         return;
     }
 
@@ -259,10 +285,12 @@ public class ServerRunnable extends Thread {
         }
 
         // if its already in passive mode, turn off
-        if(this.inPassive) {
-            LOGGER.log("[ON: " + this.thread_id + "] " + "PORT cmd: Client currently connected for Passive data transfers. Turning off Passive mode.");
+        if(this.inPassive || this.inExtendedPassive || this.inExtendedPort) {
+            LOGGER.log("[ON: " + this.thread_id + "] " + "PORT cmd: Client currently connected for Passive/EPSV/EPRT data transfers. Turning off Port mode.");
             this.inPassive = false;
-            LOGGER.log("[ON: " + this.thread_id + "] " + "PORT cmd: Passive mode turned off. Ready to enter Passive mode.");
+            this.inExtendedPassive = false;
+            this.inExtendedPort = false;
+            LOGGER.log("[ON: " + this.thread_id + "] " + "PORT cmd: Passive/EPSV/EPRT mode turned off. Ready to enter Port mode.");
         }
 
         // parse command to get host and port number
@@ -285,8 +313,24 @@ public class ServerRunnable extends Thread {
             return;
         }
 
+        // if its already in passive mode, turn off
+        if(this.inPassive || this.inExtendedPassive || this.inPort) {
+            LOGGER.log("[ON: " + this.thread_id + "] " + "PORT cmd: Client currently connected for Passive/EPSV/PORT data transfers. Turning off other modes.");
+            this.inPassive = false;
+            this.inExtendedPassive = false;
+            this.inPort = false;
+            LOGGER.log("[ON: " + this.thread_id + "] " + "PORT cmd: Passive/EPSV/PORT mode turned off. Ready to enter Extended Port mode.");
+        }
+
         // parse eprt and send command
         // add eprt as an option to list, stor, retr
+        LOGGER.log("[ON: " + this.thread_id + "] " + "EPRT cmd: Attempting to parse client cmd.");
+        this.parseClientExtendedPort(address);
+        LOGGER.log("[ON: " + this.thread_id + "] " + "EPRT cmd: Got port and host. Set variables.");
+        LOGGER.log("Sent: 200 EPRT command successful.");
+        this.sendResponse("200 EPRT command successful.");
+        LOGGER.log("[ON: " + this.thread_id + "] " + "In Extended PORT mode.");
+        this.inExtendedPort = true;
         return;
     }
 
@@ -302,7 +346,7 @@ public class ServerRunnable extends Thread {
         // read line by line and copy the file to the client host
         // do error checking, check to see if file exists
         // close connections
-        if(this.inPassive) {
+        if(this.inPassive || this.inExtendedPassive) {
             try {
                 // in passive mode
                 LOGGER.log("[ON: " + this.thread_id + "] " + "createConnection (PASV): opening data port socket.");
@@ -331,7 +375,7 @@ public class ServerRunnable extends Thread {
                 LOGGER.log("LIST cmd: No acceptable connection from client to connect to.");
                 return;
             }
-        } else if (this.inPort) {
+        } else if (this.inPort || this.inExtendedPort) {
             try {
                 // in port mode
                 LOGGER.log("[ON: " + this.thread_id + "] " + "createConnection (PORT): opening data port socket.");
@@ -382,7 +426,7 @@ public class ServerRunnable extends Thread {
         // close connections
         File f = new File(this.currDir + "/" + filename);
         LOGGER.log("File created: " + filename);
-        if(this.inPassive) {
+        if(this.inPassive || this.inExtendedPassive) {
             try {
                 // in passive mode
                 LOGGER.log("[ON: " + this.thread_id + "] " + "createConnection (PASV): opening data port socket.");
@@ -408,7 +452,7 @@ public class ServerRunnable extends Thread {
                 LOGGER.log("LIST cmd: No acceptable connection from client to connect to.");
                 return;
             }
-        } else if (this.inPort) {
+        } else if (this.inPort || this.inExtendedPort) {
             try {
                 // in port mode
                 LOGGER.log("[ON: " + this.thread_id + "] " + "createConnection (PORT): opening data port socket.");
@@ -472,7 +516,7 @@ public class ServerRunnable extends Thread {
             directory = new File(this.currDir + "/" + d);
         }
 
-        if(this.inPassive) {
+        if(this.inPassive || this.inExtendedPassive) {
             try {
                 LOGGER.log("[ON: " + this.thread_id + "] " + "createConnection (PASV): opening data port socket.");
                 ServerSocket ps = new ServerSocket(this.dataPort);
@@ -502,7 +546,7 @@ public class ServerRunnable extends Thread {
                 LOGGER.log("LIST cmd: No acceptable connection from client to connect to.");
                 return;
             }
-        } else if (this.inPort) {
+        } else if (this.inPort || this.inExtendedPort) {
             try {
                 // in port mode
                 LOGGER.log("[ON: " + this.thread_id + "] " + "createConnection (PORT): opening data port socket.");
@@ -598,7 +642,13 @@ public class ServerRunnable extends Thread {
                 }
                 break;
             case "EPRT":
-                this.eprt(cmd);
+                try {
+                    this.eprt(args[1]);
+                } catch (IllegalArgumentException e) {
+                    LOGGER.log("[ON: " + this.thread_id + "] " + "EPRT cmd: Not a valid argument.");
+                    LOGGER.log("[ON: " + this.thread_id + "] " + "Sent: 500 Not a valid argument for EPRT command.");
+                    this.sendResponse("500 Not a valid argument for EPRT command.");
+                }
                 break;
             case "RETR":
                 try {
@@ -648,12 +698,36 @@ public class ServerRunnable extends Thread {
         }
     }
 
+    private void parseClientExtendedPort(String s) {
+        String[] numbers = s.split("|");
+        this.portHost = numbers[1];
+        try {
+            this.portDataPort = Integer.parseInt(numbers[2]);
+        } catch (NumberFormatException e) {
+            LOGGER.log("Could not convert String " + numbers[2] + " to an int.");
+            return;
+        } catch (ArrayIndexOutOfBoundsException x) {
+            LOGGER.log("2nd index of Array not available Please check parsing methods.");
+            return;
+        }
+        return;
+    }
+
     // parse port commands from client
 	private void parseClientPort(String s) {
 		String[] numbers = s.split(",");
 	    this.portHost = numbers[0] + "." + numbers [1] +"." + numbers[2] + "." + numbers [3];
 		this.portDataPort = getPort(numbers[4], numbers[5]);
 		return;
+    }
+
+    private int getEpsvPort() {
+        List<Integer> ports = Arrays.asList(26503, 29319, 47495, 25223);
+        ArrayList<Integer> avail_ports = new ArrayList<>();
+        avail_ports.addAll(ports);
+        Random num = new Random();
+        int port = avail_ports.get(num.nextInt(avail_ports.size()));
+        return port;
     }
 
     private ArrayList<Integer> getPasvPort() {
