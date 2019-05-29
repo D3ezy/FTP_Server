@@ -23,16 +23,16 @@ public class Main {
     public static void main(String[] args) {
         // arg check
 		if (args.length != 2) {
-			LOGGER.log("Usage: java -jar .\\build\\libs\\CS472-ftpServer-all-x.x.jar <log file> <listening port> <config file>");
+			LOGGER.log("Usage: java -jar .\\build\\libs\\CS472-ftpServer-all-x.x.jar <log file> <listening port>");
 			System.exit(1);
 		} 
 
-        int mode = parseConfig(args[3]);
+        int mode = parseConfig();
         Server s = new Server(args[0], args[1], mode);
         s.run();
     }
 
-    private static int parseConfig(String filename) {
+    private static int parseConfig() {
 
         // read the file line-by-line
         boolean port_mode = false;
@@ -40,7 +40,8 @@ public class Main {
         FileReader fr;
         BufferedReader br;
         try {
-            File f = new File(filename);
+            LOGGER.log("PARSE_CFG: Attempting to read ftpserverd config in root directory.");
+            File f = new File("./ftpserverd.conf");
             fr = new FileReader(f);
             br = new BufferedReader(fr);
             String line;
