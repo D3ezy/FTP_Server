@@ -211,10 +211,18 @@ public class ServerRunnable extends Thread {
     // grab an available port, open data socket on that port, accept connection
     // ez gg
     public void pasv() {
+
         if(!this.userLoggedIn) {
             LOGGER.log("[ON: " + this.thread_id + "] " + "cmd pasv: Unable to enter passive mode. User not logged in.");
             LOGGER.log("[ON: " + this.thread_id + "] " + "Sent: 530 Not logged in.");
             this.sendResponse("530 Not logged in.");
+            return;
+        }
+
+        // if pasv mode is not enabled, let the client know and return
+        if (this.transferMode == 2) {
+            LOGGER.log("");
+            this.sendResponse("comm");
             return;
         }
 
@@ -246,10 +254,18 @@ public class ServerRunnable extends Thread {
     }
 
     public void epsv() {
+
         if(!this.userLoggedIn) {
             LOGGER.log("[ON: " + this.thread_id + "] " + "cmd epsv: Unable to enter extended passive mode. User not logged in.");
             LOGGER.log("[ON: " + this.thread_id + "] " + "Sent: 530 Not logged in.");
             this.sendResponse("530 Not logged in.");
+            return;
+        }
+
+        // if epsv mode is not enabled, let the client know and return
+        if (this.transferMode == 2) {
+            LOGGER.log("");
+            this.sendResponse("comm");
             return;
         }
 
@@ -279,10 +295,18 @@ public class ServerRunnable extends Thread {
     }
 
     public void port(String address) {
+
         if(!this.userLoggedIn) {
             LOGGER.log("[ON: " + this.thread_id + "] " + "PORT cmd: Unable to enable port mode. User not logged in.");
             LOGGER.log("[ON: " + this.thread_id + "] " + "Sent: 530 Not logged in.");
             this.sendResponse("530 Not logged in.");
+            return;
+        }
+
+        // if port mode is not enabled, let the client know and return
+        if (this.transferMode == 1) {
+            LOGGER.log("");
+            this.sendResponse("comm");
             return;
         }
 
@@ -308,10 +332,18 @@ public class ServerRunnable extends Thread {
     }
 
     public void eprt(String address) {
+
         if(!this.userLoggedIn) {
             LOGGER.log("[ON: " + this.thread_id + "] " + "cmd eprt: Unable to enter extended port mode. User not logged in.");
             LOGGER.log("[ON: " + this.thread_id + "] " + "Sent: 530 Not logged in.");
             this.sendResponse("530 Not logged in.");
+            return;
+        }
+
+        // if eprt mode is not enabled, let the client know and return
+        if (this.transferMode == 1) {
+            LOGGER.log("");
+            this.sendResponse("comm");
             return;
         }
 
