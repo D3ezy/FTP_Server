@@ -55,13 +55,13 @@ public class Main {
                     LOGGER.log("PARSE_CFG: Found comment line. Skipping.");
                 } else {
                     String[] cmd = line.split("=");
-                    if (cmd[0].equalsIgnoreCase("PORT_MODE")) {
-                        if (cmd[1].equalsIgnoreCase("ON")) {
+                    if (cmd[0].replaceAll("\\s+", "").equalsIgnoreCase("port_mode")) {
+                        if (cmd[1].replaceAll("\\s+", "").equalsIgnoreCase("ON")) {
                             LOGGER.log("PARSE_CFG: Found PORT config. Turning on PORT mode for server.");
                             port_mode = true;
                         }
-                    } else if (cmd[0].equalsIgnoreCase("PASV_MODE")) {
-                        if (cmd[1].equalsIgnoreCase("ON")) {
+                    } else if (cmd[0].replaceAll("\\s+", "").equalsIgnoreCase("pasv_mode")) {
+                        if (cmd[1].replaceAll("\\s+", "").equalsIgnoreCase("ON")) {
                             LOGGER.log("PARSE_CFG: Found PASV config. Turning on PASV mode for server.");
                             pasv_mode = true;
                         }
