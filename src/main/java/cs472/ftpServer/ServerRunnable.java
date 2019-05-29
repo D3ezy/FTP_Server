@@ -221,8 +221,9 @@ public class ServerRunnable extends Thread {
 
         // if pasv mode is not enabled, let the client know and return
         if (this.transferMode == 2) {
-            LOGGER.log("");
-            this.sendResponse("comm");
+            LOGGER.log("[ON: " + this.thread_id + "] " + "PASV cmd: PASV not available with this config.");
+            LOGGER.log("[ON: " + this.thread_id + "] " + "Sent: 502 Command not implemented on this configuration.");
+            this.sendResponse("502 Command not implemented on this configuration.");
             return;
         }
 
@@ -264,8 +265,9 @@ public class ServerRunnable extends Thread {
 
         // if epsv mode is not enabled, let the client know and return
         if (this.transferMode == 2) {
-            LOGGER.log("");
-            this.sendResponse("comm");
+            LOGGER.log("[ON: " + this.thread_id + "] " + "EPSV cmd: EPSV not available with this config.");
+            LOGGER.log("[ON: " + this.thread_id + "] " + "Sent: 502 Command not implemented on this configuration.");
+            this.sendResponse("502 Command not implemented on this configuration.");
             return;
         }
 
@@ -305,8 +307,9 @@ public class ServerRunnable extends Thread {
 
         // if port mode is not enabled, let the client know and return
         if (this.transferMode == 1) {
-            LOGGER.log("");
-            this.sendResponse("comm");
+            LOGGER.log("[ON: " + this.thread_id + "] " + "PORT cmd: PORT not available with this config.");
+            LOGGER.log("[ON: " + this.thread_id + "] " + "Sent: 502 Command not implemented on this configuration.");
+            this.sendResponse("502 Command not implemented on this configuration.");
             return;
         }
 
@@ -342,8 +345,9 @@ public class ServerRunnable extends Thread {
 
         // if eprt mode is not enabled, let the client know and return
         if (this.transferMode == 1) {
-            LOGGER.log("");
-            this.sendResponse("comm");
+            LOGGER.log("[ON: " + this.thread_id + "] " + "EPRT cmd: EPRT not available with this config.");
+            LOGGER.log("[ON: " + this.thread_id + "] " + "Sent: 502 Command not implemented on this configuration.");
+            this.sendResponse("502 Command not implemented on this configuration.");
             return;
         }
 
