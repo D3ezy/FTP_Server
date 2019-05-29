@@ -22,11 +22,13 @@ public class Server {
     private boolean isRunning;
     private int connectionPort;
     private ServerSocket connectionSocket;
+    private int transferMode;
     protected Thread myThread;
 
-    Server(String logfile, String port) {
+    Server(String logfile, String port, int mode) {
         LOGGER = new Logger(logfile);
         try {
+            this.transferMode = mode;
             this.connectionPort = Integer.parseInt(port);
             LOGGER.log("Spinning up server instance on localhost:" + port);
         } catch (NumberFormatException e) {
@@ -46,7 +48,7 @@ public class Server {
                 LOGGER.log("A new client has connected: " + newConn);
                 DataInputStream input = new DataInputStream(newConn.getInputStream());
                 DataOutputStream output = new DataOutputStream(newConn.getOutputStream());
-                Thread t = new ServerRunnable(newConn,input,output,LOGGER);
+                Thread t = new ServerRunnable(newConn,input,output,LOGGER,transferMode);
                 LOGGER.log("New thread created for client connection: " + newConn);
                 t.start();
             }

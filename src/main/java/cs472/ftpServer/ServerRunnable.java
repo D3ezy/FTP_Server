@@ -55,8 +55,9 @@ public class ServerRunnable extends Thread {
     private boolean isRunning;
     private boolean inExtendedPort;
     private boolean inExtendedPassive;
+    private int transferMode;
 
-    ServerRunnable(Socket clientSocket, DataInputStream is, DataOutputStream os, Logger serverLog) {
+    ServerRunnable(Socket clientSocket, DataInputStream is, DataOutputStream os, Logger serverLog, int mode) {
         this.LOGGER = serverLog;
         this.clientSocket = clientSocket;
         this.reader = new BufferedReader(new InputStreamReader(is));
@@ -68,6 +69,7 @@ public class ServerRunnable extends Thread {
         this.inExtendedPort = false;
         this.inExtendedPassive = false;
         this.isRunning = true;
+        this.transferMode = mode;
     }
 
     @Override
