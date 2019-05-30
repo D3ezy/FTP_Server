@@ -1,4 +1,0 @@
-this is a file from the server
-This is still a file from the server
-but I have to add more bytes I think
-IDK Why, might have to relook at the stor function
